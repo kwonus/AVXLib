@@ -80,7 +80,7 @@ using AVName = struct AVNameDXI
     BYTE   meanings;
 };
 
-void initialize(TCHAR* folder);
+void initialize(char* folder);
 void release();
 UINT32 getWritCnt();
 UINT16 getBookCnt();

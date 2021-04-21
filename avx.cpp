@@ -27,14 +27,14 @@ static std::unordered_map<UINT16, AVLexicon*> lexicon;
 static std::unordered_map<UINT16, AVWordClass*> wclass;
 static std::unordered_map<UINT16, AVName*> names;
 
-#define AVTEXT		L"AV-Writ.dx5"
-#define AVLEXICON	L"AV-Lexicon.dxi"
-#define AVLEMMA		L"AV-Lemma.dxi"
-#define AVBOOK		L"AV-Book.ix8"
-#define AVCHAPTER	L"AV-Chapter.ix2"
-#define AVVERSE		L"AV-Verse.ix1"
-#define AVNAMES		L"AV-Names.dxi"
-#define AVWCLASS	L"AV-WordClass.dxi"
+#define AVTEXT		"AV-Writ.dx5"
+#define AVLEXICON	"AV-Lexicon.dxi"
+#define AVLEMMA		"AV-Lemma.dxi"
+#define AVBOOK		"AV-Book.ix8"
+#define AVCHAPTER	"AV-Chapter.ix2"
+#define AVVERSE		"AV-Verse.ix1"
+#define AVNAMES		"AV-Names.dxi"
+#define AVWCLASS	"AV-WordClass.dxi"
 
 // Only works on intel-byte-order
 //
@@ -171,22 +171,22 @@ extern "C" UINT16 getLemma(UINT32 pos, UINT16 wkey, char* data[], UINT16 arrayLe
 }
 ///
 
-extern "C" void initialize(TCHAR * folder)	// folder is currently ignored, but needs to be passed in for releasable code
+extern "C" void initialize(char * folder)	// folder is currently ignored, but needs to be passed in for releasable code
 {
     if (folder != NULL)
         Strncpy(g_hSharedHome, folder, MAX_PATH);
     else
-        g_hSharedHome[0] = (TCHAR)0;
+        g_hSharedHome[0] = (char)0;
 
-    writ = Writ.Acquire((TCHAR*)(AVTEXT), false, true);
-    books = allocAVBook.Acquire((TCHAR*)(AVBOOK), false, false);
-    chapters = allocAVChapter.Acquire((TCHAR*)(AVCHAPTER), false, false);
-    verses = allocAVVerse.Acquire((TCHAR*)(AVVERSE), false, false);
+    writ = Writ.Acquire(AVTEXT, false, true);
+    books = allocAVBook.Acquire(AVBOOK, false, false);
+    chapters = allocAVChapter.Acquire(AVCHAPTER, false, false);
+    verses = allocAVVerse.Acquire(AVVERSE, false, false);
 
     // Process Lexicon
     UINT16 lexnum = 1;
     {
-        BYTE* lex = Lexicon.Acquire((TCHAR*)(AVLEXICON), false, true);
+        BYTE* lex = Lexicon.Acquire(AVLEXICON, false, true);
         int cnt = Lexicon.GetCnt(); // last insertion of lexnum should finish be 12567 (size/cnt is MUCH bigger)
         BYTE* last = lex + cnt - 1;
 
@@ -206,7 +206,7 @@ extern "C" void initialize(TCHAR * folder)	// folder is currently ignored, but n
     }
     // Process AVLemma
     {
-        BYTE* lemm = Lemma.Acquire((TCHAR*)(AVLEMMA), false, true);
+        BYTE* lemm = Lemma.Acquire(AVLEMMA, false, true);
         int bcnt = Lemma.GetCnt();
         BYTE* last = lemm + bcnt - 1; // last UINT32 (+8 for previous record) of file are sizing data; and ignored here)
 
@@ -237,7 +237,7 @@ extern "C" void initialize(TCHAR * folder)	// folder is currently ignored, but n
     {
         auto bytes = allocAVName;
         AVName* record;
-        BYTE* data = bytes.Acquire((TCHAR*)(AVNAMES), false, false);
+        BYTE* data = bytes.Acquire(AVNAMES, false, false);
         int bcnt = bytes.GetCnt();
         for (auto end = data + bcnt; data < end; /**/) {
             record = (AVName*)data;
@@ -253,7 +253,7 @@ extern "C" void initialize(TCHAR * folder)	// folder is currently ignored, but n
         auto bytes = allocAVWordClass;
 
         AVWordClass* record;
-        BYTE* data = bytes.Acquire((TCHAR*)(AVWCLASS), false, false);
+        BYTE* data = bytes.Acquire(AVWCLASS, false, false);
         int bcnt = bytes.GetCnt();
 
         for (auto end = data + bcnt; data < end; /**/) {
