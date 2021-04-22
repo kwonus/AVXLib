@@ -171,7 +171,7 @@ extern "C" UINT16 getLemma(UINT32 pos, UINT16 wkey, char* data[], UINT16 arrayLe
 }
 ///
 
-extern "C" void initialize(char * folder)	// folder is currently ignored, but needs to be passed in for releasable code
+extern "C" void initialize(char * folder)
 {
     if (folder != NULL)
         Strncpy(g_hSharedHome, folder, MAX_PATH);
