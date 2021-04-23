@@ -57,6 +57,12 @@ using AVLemma = struct AVLemmaDXI
     UINT16* lemma;
 };
 
+using AVLemmaOOV = struct AVLemmaOovDXI
+{
+    UINT16 oovKey;
+    char lemma;
+};
+
 using AVLexicon = struct AVLexiconDXI
 {
     UINT16 entities;

@@ -8,6 +8,7 @@ using namespace std;
 static XVMem<AVWrit> Writ;
 static XVMem<BYTE> Lexicon;
 static XVMem<BYTE> Lemma;
+static XVMem<BYTE> LemmaOOV;
 
 // Uses memory on the heap
 XVMem<AVBook> allocAVBook;
@@ -23,6 +24,7 @@ static AVChapter*chapters;	// [1+0x4A4];
 static AVVerse*	 verses;	// [1+0x797D];
 // Maps
 static std::unordered_map<UINT64, AVLemma*> lemma;
+static std::unordered_map<UINT16, char*> lemmaOOV;
 static std::unordered_map<UINT16, AVLexicon*> lexicon;
 static std::unordered_map<UINT16, AVWordClass*> wclass;
 static std::unordered_map<UINT16, AVName*> names;
@@ -30,6 +32,7 @@ static std::unordered_map<UINT16, AVName*> names;
 #define AVTEXT		"AV-Writ.dx5"
 #define AVLEXICON	"AV-Lexicon.dxi"
 #define AVLEMMA		"AV-Lemma.dxi"
+#define AVLEMMAOOV	"AV-Lemma-OOV.dxi"
 #define AVBOOK		"AV-Book.ix8"
 #define AVCHAPTER	"AV-Chapter.ix2"
 #define AVVERSE		"AV-Verse.ix1"
@@ -54,6 +57,7 @@ inline UINT64 uint64(BYTE* buffer) {
 extern "C" void release()
 {
     lemma.clear();
+    lemmaOOV.clear();
     lexicon.clear();
     wclass.clear();
     names.clear();
@@ -61,6 +65,7 @@ extern "C" void release()
     Writ.Release();
     Lexicon.Release();
     Lemma.Release();
+    LemmaOOV.Release();
     allocAVBook.Release();
     allocAVChapter.Release();
     allocAVVerse.Release();
@@ -149,15 +154,13 @@ extern "C" UINT16 getLemma(UINT32 pos, UINT16 wkey, char* data[], UINT16 arrayLe
         for (i = 0; i < record->lemmaCnt; i++, location += sizeof(UINT16)) {
             char* lemma;
             UINT16 key = uint16(location);
-            if (key == 0xFFFF)
+            if ((key & 0x8000) == 0x8000)   // this lemma is OOV
             {
-                lemma = (char*)(location + sizeof(UINT16));
-                UINT16 len = strlen(lemma);
-                ++ location += len;
+                lemma = lemmaOOV[key];
             }
             else
             {
-                bool modernized = (key & 0xC000) == 0xC000;
+                bool modernized = (key & 0x4000) == 0x4000;
                 lemma = !modernized ? getLexicalEntry(key, DISPLAY) : getLexicalEntry(key &0x7FFF, MODERN);
             }
             if (i < arrayLen)
@@ -228,9 +231,23 @@ extern "C" void initialize(char * folder)
             for (UINT16 x = 0; x < record->lemmaCnt; x++) {
                 UINT16 key = uint16(lemm);
                 lemm += sizeof(UINT16);
-                if (key == 0xFFFF)
-                    lemm += (1 + strlen((char*)lemm));
             }
+        }
+    }
+    // Process AVLemmaOOV
+    {
+        BYTE* lemmOOV = LemmaOOV.Acquire(AVLEMMAOOV, false, true);
+        int bcnt = LemmaOOV.GetCnt();
+        BYTE* last = lemmOOV + bcnt - 1; // last UINT32 (+8 for previous record) of file are sizing data; and ignored here)
+
+        UINT64 hashKey;
+        UINT16 len = 0;
+        for (/**/; lemmOOV < last; lemmOOV += (sizeof(UINT16) + len)) {
+            auto record = (AVLemmaOOV*)lemmOOV;
+            lemmaOOV.insert({ record->oovKey, &(record->lemma) });
+            if (record->oovKey == 0x8F01)
+                break;
+            len = 1 + (record->oovKey & 0x0F00) >> 8;
         }
     }
     // Process AVNames
