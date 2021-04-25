@@ -8,4 +8,4 @@ include_directories(AFTER "C:/Users/kevin/source/C/XVMem")
 add_library(AVXLib avx.cpp search.cpp
 			avx.h CLexIndex.cpp CLexIndex.h fivebitencoding.cpp fivebitencoding.h
 			Searchrequest.h SearchControls.h SearchClause.h SearchFragment.h
-			TokenVector.h TokenMatch.h TokenFeature.h)
+			FeatureSpec.h FeatureMatch.h Feature.h)
