@@ -29,13 +29,16 @@ static std::unordered_map<UINT16, AVLexicon*> lexicon;
 static std::unordered_map<UINT16, AVWordClass*> wclass;
 static std::unordered_map<UINT16, AVName*> names;
 
-#define AVTEXT		"AV-Writ.dx5"
+//  Fixed-Length binary files:
+#define AVTEXT		"AV-Writ.dx"
+#define AVBOOK		"AV-Book.ix"
+#define AVCHAPTER	"AV-Chapter.ix"
+#define AVVERSE		"AV-Verse.ix"
+
+//  variable-Length binary files:
 #define AVLEXICON	"AV-Lexicon.dxi"
 #define AVLEMMA		"AV-Lemma.dxi"
 #define AVLEMMAOOV	"AV-Lemma-OOV.dxi"
-#define AVBOOK		"AV-Book.ix8"
-#define AVCHAPTER	"AV-Chapter.ix2"
-#define AVVERSE		"AV-Verse.ix1"
 #define AVNAMES		"AV-Names.dxi"
 #define AVWCLASS	"AV-WordClass.dxi"
 

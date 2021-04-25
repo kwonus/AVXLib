@@ -7,7 +7,7 @@
 
 extern "C"
 {
-using AVWrit = struct AVWritDX5
+using AVWrit = struct AVWritDX
 {
     UINT64 srclang;
     UINT16 verseIdx;
@@ -16,11 +16,12 @@ using AVWrit = struct AVWritDX5
     BYTE transition;
     UINT16 pnwc;
     UINT32 pos;
+    UINT16 lemma;
 };
 
 const BYTE NAME_LEN = 16;
 const BYTE ABBR_LEN = 12;
-using AVBook = struct AVBookIX8
+using AVBook = struct AVBookIX
 {
     BYTE book;
     BYTE chapterCnt;
@@ -33,14 +34,14 @@ using AVBook = struct AVBookIX8
     UINT32 abbreviations_part2;
 };
 
-using AVChapter = struct AVChapterIX2
+using AVChapter = struct AVChapterIX
 {
     UINT32 writIdx;
     UINT16 verseIdx;
     UINT16 wordCnt;
 };
 
-using AVVerse = struct AVVerseIX1
+using AVVerse = struct AVVerseIX
 {
     BYTE book;
     BYTE chapter;
