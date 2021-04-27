@@ -6,7 +6,7 @@
 struct SearchFragment
 {
 	UINT32*			positionAspects;
-//	FeatureSpec*	spec;	// spec is "Any Of" features in the specification
+//	FeatureSpec*	spec;	// spec is "All Of" features in the specification
 	char*			text;
 };
 
@@ -14,14 +14,14 @@ class CSearchFragment: slicable
 {
 public:
 	const UINT32* const			positionAspects;
-	std::vector<CFeatureSpec*>	spec;	// spec is "Any Of" features in the specification
+	std::vector<CFeatureSpec*>	spec;	// spec is "All Of" features in the specification
 
 	CSearchFragment(SearchFragment& fragment, slicable& text, UINT32 begin, UINT32 end) : slicable(text, begin, end), positionAspects { fragment.positionAspects }
 	{
 		if (this->len >= 0) {
 			UINT32 previous = 0;
 			for (UINT32 i = 0; i < this->len; i++)
-				if (this->input[i] == '|') {
+				if (this->input[i] == '&') {
 					if (previous < i)	// eliminate empty items
 						spec.push_back(new CFeatureSpec(*this, previous, i - previous));
 					previous = i + 1;
