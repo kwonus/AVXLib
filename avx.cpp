@@ -1,8 +1,5 @@
 #include "avx.h"
 #include "fivebitencoding.h"
-#include <unordered_map>
-
-using namespace std;
 
 // Uses shared memory
 static XVMem<AVWrit> Writ;
@@ -28,6 +25,26 @@ static std::unordered_map<UINT16, char*> lemmaOOV;
 static std::unordered_map<UINT16, AVLexicon*> lexicon;
 static std::unordered_map<UINT16, AVWordClass*> wclass;
 static std::unordered_map<UINT16, AVName*> names;
+
+static std::unordered_map<UINT16, char*> forwardLemma;
+static std::unordered_map<UINT64, Bucket*> reverseLemma;
+static std::unordered_map<UINT64, Bucket*> reverseModern;
+static std::unordered_map<UINT64, UINT16> reverseSearch;
+static std::unordered_map<UINT64, UINT16> reverseName;
+
+static std::unordered_map<UINT64, BYTE> slashBoundaries; // examples: /BoV/ /BoC/ /BoB/ /EoV/ /EoC/ /EoB/
+static std::unordered_map<UINT64, BYTE> slashPunc;       // examples: /;/ /./ /?/ /'/
+static std::unordered_map<UINT64, BYTE> poundWordSuffix; // examples: #kjv[1] #av[1] #exact[1] #avx[2] #modern[2] #any[3] #fuzzy[3]
+static std::unordered_map<UINT64, BYTE> poundWordless;   // examples: #diff
+// Additional Patterns:
+//                                      Discrete POS     // examples: /av/ /dt/ /n2-vhg/   [morh-adorner]
+//                                      bitwise POS      // examples: /-01-/ [noun] /-1--/ [verb] /6028/ [pronoun+2PS+genetive] /-03-/ [proper noun]
+//                                      GREEK:           // examples: G12345 12345G
+//                                      HEBREW:          // examples: H12345 12345H
+//                                      ENGLISH:         // examples: E12345 12345E  // from AV-Lexicon
+//                                      LEMMA:           // examples: #run
+//                                      WILDCARDS:       // examples: run* you*#modern
+//                                      COMBINATIONS:    // examples: t*#av&/pn#2ps/&#diff
 
 //  Fixed-Length binary files:
 #define AVTEXT		"AV-Writ.dx"
@@ -64,6 +81,16 @@ extern "C" void release()
     lexicon.clear();
     wclass.clear();
     names.clear();
+
+    forwardLemma.clear();
+
+    for (auto it = reverseLemma.begin(); it != reverseLemma.end(); ++it)
+        delete it->second;
+    reverseLemma.clear();
+
+    for (auto it = reverseModern.begin(); it != reverseModern.end(); ++it)
+        delete it->second;
+    reverseModern.clear();
 
     Writ.Release();
     Lexicon.Release();
@@ -118,7 +145,7 @@ extern "C" AVVerse& getVerse(UINT16 idx)
     return idx < allocAVVerse.GetCnt() ? verses[idx] : verses[allocAVVerse.GetCnt()-1];
 }
 // These are the only variable length entries other than pos.  Record can be used directly for other firelds.
-char* getLexicalEntry(UINT16 rawkey, BYTE sequence)	// seq=0:search; seq=1:display; seq=2:modern;
+extern "C" char* getLexicalEntry(UINT16 rawkey, BYTE sequence)	// seq=0:search; seq=1:display; seq=2:modern;
 {
     UINT16 key = rawkey & 0x3FFF;
     if (key < 1 || key > 12567)
@@ -141,12 +168,19 @@ char* getLexicalEntry(UINT16 rawkey, BYTE sequence)	// seq=0:search; seq=1:displ
     if (sequence == MODERN)
         return (*modern != (char)0) ? modern : (*display != (char)0) ? display : search;
 
+    if (sequence == MODERN_WITHOUT_HYPHENS)
+        return (*modern != (char)0) ? modern : search;
+
     return NULL;
+}
+extern "C" char* getOovEntry(UINT16 key)
+{
+    return lemmaOOV.count(key) != 0 ? lemmaOOV.at(key) : NULL;
 }
 extern "C" UINT16 getLemma(UINT32 pos, UINT16 wkey, char* data[], UINT16 arrayLen)
 {
     UINT64 hashKey = (((UINT64)pos) << 32) + wkey;
-    AVLemma* record = lemma.at(hashKey);
+    AVLemma* record = lemma.count(hashKey) != 0 ? lemma.at(hashKey) : NULL;
 
     if (record != NULL) {
         if (arrayLen < 1 || data == NULL)
@@ -206,8 +240,41 @@ extern "C" void initialize(char * folder)
             // add slot for each POS
             lex += (sizeof(UINT32) * record->posCnt);
             // Get counts for search, modern, and search ..
-            for (BYTE x = 1; x <= MODERN; x++)
-                lex += (1 + strlen((char*)lex));
+            UINT64 hash;
+            for (BYTE x = SEARCH; x <= MODERN; x++) {
+                char* token = (char*)lex;
+                switch (x) {
+                    case SEARCH:    hash = Hash64(token); 
+                                    reverseSearch.insert({ hash, lexnum });
+                                    break;
+                    case MODERN:    if (*token != 0)
+                                        hash = Hash64(token);
+                                        if (reverseModern.count(hash) == 0) {
+                                            reverseModern.insert({ hash, new Bucket(lexnum) });
+                                        }
+                                        else {
+                                            Bucket* bucket = reverseModern.at(hash);
+                                            bucket->AddOverflow(lexnum);
+                                        }
+                                    break;
+                }
+                lex += (1 + strlen(token));
+            }
+        }
+    }
+    // Process AVLemmaOOV
+    {
+        BYTE* lemmOOV = LemmaOOV.Acquire(AVLEMMAOOV, false, true);
+        int bcnt = LemmaOOV.GetCnt();
+        BYTE* last = lemmOOV + bcnt - 1; // last UINT32 (+8 for previous record) of file are sizing data; and ignored here)
+
+        UINT16 len = 0;
+        for (/**/; lemmOOV < last; lemmOOV += (sizeof(UINT16) + len)) {
+            auto record = (AVLemmaOOV*)lemmOOV;
+            lemmaOOV.insert({ record->oovKey, &(record->lemma) });
+            if (record->oovKey == 0x8F01)
+                break;
+            len = 1 + ((record->oovKey & 0x0F00) >> 8);
         }
     }
     // Process AVLemma
@@ -219,6 +286,24 @@ extern "C" void initialize(char * folder)
         UINT64 hashKey;
         for (int i = 0; lemm <= last && uint32(lemm) != 0xFFFFFFFF; i++) {
             auto record = (AVLemma*) lemm;
+
+            char* token = NULL;
+            switch (record->wordKey & 0xC000) {
+                case 0x8000:    token = getOovEntry(record->wordKey); break;
+                case 0x4000:    token = getLexicalEntry(record->wordKey, MODERN_WITHOUT_HYPHENS); break;
+                case 0x0000:    token = getLexicalEntry(record->wordKey, SEARCH); break;
+            }
+            if (token != NULL) {
+                forwardLemma.insert({ record->wordKey, token });
+                UINT64 hash = Hash64(token);
+                if (reverseLemma.count(hash) == 0) {
+                    reverseLemma.insert({ hash, new Bucket(record->wordKey) });
+                }
+                else {
+                    Bucket* bucket = reverseLemma.at(hash);
+                    bucket->AddOverflow(record->wordKey);
+                }
+            }
 
             hashKey = ((UINT64)(record->pos) << 32) + (UINT64)(record->wordKey);
             lemma.insert({ hashKey, record });
@@ -235,22 +320,6 @@ extern "C" void initialize(char * folder)
                 UINT16 key = uint16(lemm);
                 lemm += sizeof(UINT16);
             }
-        }
-    }
-    // Process AVLemmaOOV
-    {
-        BYTE* lemmOOV = LemmaOOV.Acquire(AVLEMMAOOV, false, true);
-        int bcnt = LemmaOOV.GetCnt();
-        BYTE* last = lemmOOV + bcnt - 1; // last UINT32 (+8 for previous record) of file are sizing data; and ignored here)
-
-        UINT64 hashKey;
-        UINT16 len = 0;
-        for (/**/; lemmOOV < last; lemmOOV += (sizeof(UINT16) + len)) {
-            auto record = (AVLemmaOOV*)lemmOOV;
-            lemmaOOV.insert({ record->oovKey, &(record->lemma) });
-            if (record->oovKey == 0x8F01)
-                break;
-            len = 1 + (record->oovKey & 0x0F00) >> 8;
         }
     }
     // Process AVNames
@@ -283,4 +352,99 @@ extern "C" void initialize(char * folder)
             data += record->width * sizeof(UINT32);
         }
     }
+}
+static const UINT64 BoV = HashTrivial("BoV");
+static const UINT64 EoV = HashTrivial("EoV");
+static const UINT64 BoC = HashTrivial("BoC");
+static const UINT64 EoC = HashTrivial("EoC");
+static const UINT64 BoB = HashTrivial("BoB");
+static const UINT64 EoB = HashTrivial("EoB");
+
+std::unordered_map<UINT64, BYTE>* getSlashBoundaryMap() {
+    if (slashBoundaries.count(BoV) == 0) {
+        slashBoundaries.insert({ HashTrivial("BoV"), 0x20 });
+        slashBoundaries.insert({ HashTrivial("EoV"), 0x30 });
+        slashBoundaries.insert({ HashTrivial("BoC"), 0x60 });
+        slashBoundaries.insert({ HashTrivial("EoC"), 0x70 });
+        slashBoundaries.insert({ HashTrivial("BoB"), 0xE0 });
+        slashBoundaries.insert({ HashTrivial("EoB"), 0xF0 });
+    }
+    return &slashBoundaries;
+}
+std::unordered_map<UINT64, BYTE>* getSlashPuncMap() {
+    if (slashPunc.count(HashTrivial("!")) == 0) {
+        slashPunc.insert({ HashTrivial("!"), 0x80 });
+        slashPunc.insert({ HashTrivial("?"), 0xC0 });
+        slashPunc.insert({ HashTrivial("."), 0xE0 });
+        slashPunc.insert({ HashTrivial("-"), 0xA0 });
+        slashPunc.insert({ HashTrivial(";"), 0x20 });
+        slashPunc.insert({ HashTrivial(","), 0x40 });
+        slashPunc.insert({ HashTrivial(":"), 0x60 });
+        slashPunc.insert({ HashTrivial("'"), 0x10 });
+        slashPunc.insert({ HashTrivial(")"), 0x0C });
+        slashPunc.insert({ HashTrivial("("), 0x04 });
+        slashPunc.insert({ HashTrivial("italics"), 0x02 });
+        slashPunc.insert({ HashTrivial("jesus"), 0x01 });
+    }
+    return &slashPunc;
+}
+std::unordered_map<UINT64, BYTE>* getPoundWordSuffixMap() { // examples: #kjv[1] #av[1] #exact[1] #avx[2] #modern[2] #any[3] #fuzzy[3]
+    if (poundWordSuffix.count(HashTrivial("#av")) == 0) {
+        poundWordSuffix.insert({ HashTrivial("#av"), 1 });
+        poundWordSuffix.insert({ HashTrivial("#kjv"), 1 });
+        poundWordSuffix.insert({ HashTrivial("#exact"), 1 });
+        poundWordSuffix.insert({ HashTrivial("#avx"), 2 });
+        poundWordSuffix.insert({ HashTrivial("#modern"), 2 });
+        poundWordSuffix.insert({ HashTrivial("#any"), 3 });
+        poundWordSuffix.insert({ HashTrivial("#fuzzy"), 3 });
+    }
+    return &poundWordSuffix;
+}
+const BYTE DIFF = 1;
+std::unordered_map<UINT64, BYTE>* getPoundWordlessMap() {   // examples: #diff
+    if (poundWordless.count(HashTrivial("#diff")) == 0) {
+        poundWordSuffix.insert({ HashTrivial("#diff"), DIFF });
+    }
+    return &poundWordless;
+}
+std::unordered_map<UINT16, char*>* getLemmaOovMap()
+{
+    return &lemmaOOV;
+}
+std::unordered_map<UINT64, AVLemma*>* getLemmaMap()
+{
+    return &lemma;
+}
+std::unordered_map<UINT16, AVLexicon*>* getLexiconMap()
+{
+    return &lexicon;
+}
+std::unordered_map<UINT16, AVWordClass*>* getWclassMap()
+{
+    return &wclass;
+}
+std::unordered_map<UINT16, AVName*>* getNamesMap()
+{
+    return &names;
+}
+
+std::unordered_map<UINT16, char*>* getForwardLemmaMap()
+{
+    return &forwardLemma;
+}
+std::unordered_map<UINT64, Bucket*>* getReverseLemmaMap()
+{
+    return &reverseLemma;
+}
+std::unordered_map<UINT64, Bucket*>* getReverseModernMap()
+{
+    return &reverseModern;
+}
+std::unordered_map<UINT64, UINT16>* getReverseSearchMap()
+{
+    return &reverseSearch;
+}
+std::unordered_map<UINT64, UINT16>* getReverseNameMap()
+{
+    return &reverseName;
 }

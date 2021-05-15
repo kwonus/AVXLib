@@ -5,7 +5,15 @@
 #include <locale>
 #include <string>
 
+#include <unordered_map>
+
 using namespace std;
+
+static std::unordered_map<UINT64, char*>  hashToString;
+
+char* getHashedString(UINT64 hash) {
+	return hashToString.count(hash) != 0 ? hashToString.at(hash) : NULL;
+}
 
 // trim from start (in place)
 static inline void ltrim(std::string& str) {
@@ -135,6 +143,185 @@ char* DecodePOS(UINT32 encoding) {
 	decoded[index] = 0;
 	return decoded;
 }
+// For Part-of-Speech:
+UINT64 Hash64(char* token) { // input string must be ascii lowercase; hyphens are ignored (reliability in question when string exceeds length 10
+	auto len = strlen(token);
+	auto input = trim_copy(token);
+
+	UINT64 A, E, I, O, U;
+	A = E = I = O = U = 0;
+	len = input.length();
+	int ignore = 0; // e.g. hyphens
+	for (auto i = 0; i < len; i++) {
+		auto c = tolower(input[i]);
+		if (c < 'a' || c > 'z')
+			ignore++;
+	}
+
+	UINT64 hash = 0;
+
+	if (len-ignore <= 10)	// 5-bit-encoding
+	{
+		char buffer[10];	// 10x 5bit characters
+		ignore = 0;
+		for (auto i = 0; i < len; i++) {
+			auto c = tolower(input[i]);
+			if (c >= 'a' && c <= 'z')
+				buffer[i-ignore] = c;
+			else
+				ignore++;
+		}
+		auto position = (UINT64)0x1 << (64 - (13 + 1));
+		len -= ignore;
+		for (auto i = 0; i < len; i++) {
+			char letter = buffer[i] & 0x1F;
+			if (letter == 0)
+				break;
+
+			hash |= (UINT64)letter * position;
+			position >>= 5;
+		}
+	}
+	else // 3-bit hashes
+	{
+		BYTE buffer[16];	// 16x 3bit hashes
+		ignore = 0;
+
+		for (auto i = 0; i < len; i++) {
+			if (i-ignore >= 16)
+				break;
+			auto c = tolower(input[i]);
+			switch (c) {
+				// vowel = 1;
+				case 'a':	if (A < 3) A++;
+							buffer[i-ignore] = 0;
+							continue;
+				case 'e':	if (E < 3) E++;
+							buffer[i-ignore] = 0;
+							continue;
+				case 'i':	if (I < 3) I++;
+							buffer[i-ignore] = 0;
+							continue;
+				case 'o':	if (O < 3) O++;
+							buffer[i-ignore] = 0;
+							continue;
+				case 'u':	if (U < 3) U++;
+							buffer[i-ignore] = 0;
+							continue;
+				case 'b':
+				case 'd':
+				case 'f':
+				case 'g':
+				case 'p':	buffer[i-ignore] = 2;
+							continue;
+
+				case 'h':
+				case 'y':
+				case 'r':
+				case 'j':
+				case 'l':	buffer[i-ignore] = 3;
+							continue;
+				case 'w':
+				case 'v':
+				case 'm':
+				case 'n':	buffer[i-ignore] = 4;
+							continue;
+				case 'x':
+				case 'z':	buffer[i-ignore] = 5;
+							continue;
+				case 'q':
+				case 'k':
+				case 'c':	buffer[i-ignore] = 6;
+							continue;
+				case 't':	buffer[i-ignore] = 7;
+							continue;
+				case 's':	buffer[i-ignore] = 1;
+							continue;
+				default:	ignore++;
+			}
+		}
+		len -= ignore;
+		if (len > 16)
+			len = 16;
+		UINT64 bitcnt = 61; // first 3 bits
+		UINT64 bitval = len - 9;
+		hash = bitval << bitcnt;
+		bitcnt -= 2;
+		hash += (A << bitcnt); // next 2-bits
+		bitcnt -= 2;
+		hash += (E << bitcnt); // next 2-bits
+		bitcnt -= 2;
+		hash += (I << bitcnt); // next 2-bits
+		bitcnt -= 2;
+		hash += (O << bitcnt); // next 2-bits
+		bitcnt -= 2;
+		hash += (U << bitcnt); // next 2-bits
+
+		auto position = (UINT64)0x1 << (64 - (13 + 1));
+		for (auto i = 0; i < len; i++) {
+			BYTE letter = buffer[i] & 0x07;
+			hash |= (UINT64)letter * position;
+			position >>= 3;
+		}
+	}
+	if (hashToString.count(hash) != 0) {	// don't allow collisions
+		char* previous = hashToString.at(hash);
+		int t, p;
+		for (t = p = 0; token[t] != 0 && previous[p] != 0; t++, p++) {
+			if (token[t] == '-' && token[++t] == 0)
+				return 0;
+			if (previous[p] == '-' && previous[++p] == 0)
+				return 0;
+			if (tolower(token[t]) != tolower(previous[p]))
+				return 0;
+		}
+	}
+	else hashToString.insert({ hash, token });
+	return hash;
+}
+UINT64 HashTrivial(char* c) { // input string must be ascii and cannot exceed 8
+	UINT64 hash = 0;
+	char* chash = (char*)&hash;
+
+	int len = strlen(c);
+	if (len == 1)
+	{
+		chash[sizeof(UINT64)-1] = tolower(*c);	// this way, the UINT64 will equal the byte value precisely
+	}
+	else if (len > 0)
+	{
+		for (int i = 0; i < sizeof(UINT64); i++) // sizeof(UINT64) == 8
+			*chash++ = tolower(*c++);
+	}
+	return hash;
+}
+int getHashedTrivialString(UINT64 hash, char* buffer, int len) {
+	char* chash = (char*)&hash;
+
+	if (*chash == 0) {
+		if (buffer != NULL && len >= 2) {
+			*buffer++ = chash[sizeof(UINT64) - 1];
+			*buffer = 0;
+			return 1;
+		}
+	}
+	else {
+		int i;
+		for (i = 0; i < len; i++)
+		{
+			*buffer++ = *chash;
+			if (*chash++ == 0)
+				return i;
+		}
+		if (i < len)
+		{
+			*buffer = 0;
+			return i;
+		}
+	}
+	return -1;
+}
+
 // These are no longer used [created for Z-08 / deprecated in Z-14 ]
 #ifdef Z08
 UINT16* Encode(char* input3charsMax, int maxSegments) { // input string must be ascii

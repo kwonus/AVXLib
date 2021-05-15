@@ -6,7 +6,7 @@ struct Feature
 {
 	char*	feature;
 	char	featureType;
-	UINT16* featureMatchVector;
+	UINT16* featureVector;
 };
 
 class CFeature: slicable
@@ -17,12 +17,18 @@ public:
 	{
 		this->featureVector = NULL;
 	}
+	CFeature(slicable& feature, UINT32 begin, UINT32 end, char type, UINT16* vector)
+		: slicable(feature, begin, end), featureType{ type }
+	{
+		this->featureVector = vector;
+	}
 	virtual ~CFeature()
 	{
-		;
+		if (this->featureVector != NULL)
+			free(this->featureVector);
 	}
 	const char	featureType;
-	inline const UINT32* getFeatureVector()
+	inline const UINT16* const getFeatureVector()
 	{
 		if (featureVector == NULL) {
 			;
@@ -30,5 +36,5 @@ public:
 		return featureVector;
 	}
 private:
-	UINT32* featureVector;
+	UINT16* featureVector;
 };

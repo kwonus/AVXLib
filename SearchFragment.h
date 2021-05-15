@@ -6,7 +6,7 @@
 struct SearchFragment
 {
 	UINT32*			positionAspects;
-//	FeatureSpec*	spec;	// spec is "All Of" features in the specification
+//	FeatureSpec*	matchAll;
 	char*			text;
 };
 
@@ -30,7 +30,9 @@ public:
 	}
 	virtual ~CSearchFragment() 
 	{
-		;
+		if (!spec.empty())
+			for (auto obj = spec.begin(); obj < spec.end(); obj = obj++)
+				delete* obj;
 	}
 
 };

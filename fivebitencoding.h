@@ -5,7 +5,9 @@
 
 UINT32 EncodePOS(char* input7charsMaxWithHyphen); // input string must be ascii (max 6 chars; or 7 with hyphen in position 1 through 3)
 char* DecodePOS(UINT32 encoding);
-//UINT16* Encode(char* input3charsMax, int maxSegments); // input string must be ascii
-//char* Decode(UINT16* encoded);
+UINT64 Hash64(char* nullTerminatedHyphensRemoved); // input string must be ascii lowercase with hyphens-removed (reliability in question when string exceeds length 10
+char* getHashedString(UINT64 hash);
+UINT64 HashTrivial(char* c); // input string must be ascii and cannot exceed 8
+int getHashedTrivialString(UINT64 hash, char* buffer, int len);
 
 #endif

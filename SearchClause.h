@@ -30,7 +30,9 @@ public:
 	}
 	virtual ~CSearchClause()
 	{
-		;
+		if (!fragments.empty())
+			for (auto obj = fragments.begin(); obj < fragments.end(); obj = obj++)
+				delete* obj;
 	}
 
 protected:

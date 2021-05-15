@@ -22,4 +22,10 @@ public:
 			clauses.push_back(new CSearchClause(request.clauses[i]));
 		}
 	}
+	virtual ~CSearchRequest()
+	{
+		if (!clauses.empty())
+			for (auto obj = clauses.begin(); obj < clauses.end(); obj = obj++)
+				delete *obj;
+	}
 };
