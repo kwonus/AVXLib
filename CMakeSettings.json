@@ -9,7 +9,14 @@
       "installRoot": "${projectDir}\\out\\install\\${name}",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
-      "cmakeCommandArgs": "C:/Users/kevin/source/repos/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "cmakeCommandArgs": "C:/Users/kevin/source/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "variables": [
+        {
+          "name": "CMAKE_INSTALL_PREFIX",
+          "value": "C:/Users/kevin/source/C/AVXLib/out/build/x64-Debug",
+          "type": "PATH"
+        }
+      ]
     },
     {
       "name": "x64-Release",
@@ -20,7 +27,14 @@
       "cmakeCommandArgs": "C:/Users/kevin/source/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
-      "inheritEnvironments": [ "msvc_x64_x64" ]
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "variables": [
+        {
+          "name": "CMAKE_INSTALL_PREFIX",
+          "value": "C:/Users/kevin/source/C/AVXLib/out/build/x64-Release",
+          "type": "PATH"
+        }
+      ]
     }
   ]
 }
