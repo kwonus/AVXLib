@@ -292,7 +292,7 @@ UINT64 Encode(const char* c, bool normalize) { // input string must be ascii and
 	if (len > 0)
 	{
 		for (int i = 0; i < sizeof(UINT64); i++) // sizeof(UINT64) == 8
-			*chash++ = (normalize ? tolower(*c) : *c);
+			*chash++ = (normalize ? tolower(*c++) : *c++);
 	}
 	return hash;
 }
