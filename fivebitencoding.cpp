@@ -151,19 +151,23 @@ char* DecodePOS(UINT32 encoding) {
 // - size <= 16: values for Digital-AV lexicon ALWAYS hash uniquely using 3-bit encoding, but algorithm tuned for that lexicon
 // - size >= 17: NOT TESTED on strings larger than 16! Validate on your daya or collisions handled in your custom code
 UINT64 Hash64(const char* token) { 
-	auto input = trim_copy(token);
-	auto len = input.length();
+	if (token == NULL)
+		return -1;
 
+	while (*token == ' ' || *token == '\t')
+		token++;
+
+	auto len = strlen(token);
 	if (len <= 8) {
-		UINT64 hash = Encode(input.c_str());
-		if ((hash & UseFiveBitEncodingOrThreeBitHash) != UseFiveBitEncodingOrThreeBitHash)
+		UINT64 hash = Encode(token);
+		if ((hash & UseFiveBitEncodingOrThreeBitHash) == 0)
 			return hash;
 	}
 	UINT64 hash = UseFiveBitEncodingOrThreeBitHash; // hi-order bit set marks 5-bit or 3-bit encoding
 
 	int ignore = 0; // e.g. hyphens
 	for (auto i = 0; i < len; i++) {
-		auto c = tolower(input[i]);
+		auto c = tolower(token[i]);
 		if (c < 'a' || c > 'z')
 			ignore++;
 	}
@@ -172,7 +176,7 @@ UINT64 Hash64(const char* token) {
 		char buffer[12];	// 12x 5-bit characters
 		ignore = 0;
 		for (auto i = 0; i < len; i++) {
-			auto c = tolower(input[i]);
+			auto c = tolower(token[i]);
 			if (c >= 'a' && c <= 'z')
 				buffer[i-ignore] = c;
 			else
@@ -200,7 +204,7 @@ UINT64 Hash64(const char* token) {
 		for (auto i = 0; i < len; i++) {
 			if (i - ignore >= 16)
 				break;
-			auto c = tolower(input[i]);
+			auto c = tolower(token[i]);
 			switch (c) {
 					// vowel = 1;
 				case 'a':	if (A < 3) A++;
@@ -291,7 +295,7 @@ UINT64 Encode(const char* c, bool normalize) { // input string must be ascii and
 	int len = strlen(c);
 	if (len > 0)
 	{
-		for (int i = 0; i < sizeof(UINT64); i++) // sizeof(UINT64) == 8
+		for (int i = 0; i < sizeof(UINT64) && *c != char(0); i++) // sizeof(UINT64) == 8
 			*chash++ = (normalize ? tolower(*c++) : *c++);
 	}
 	return hash;
@@ -349,7 +353,7 @@ int DecodeFiveBitHash(UINT64 hash, char* buffer, int len) {
 	return 1 + clen;
 }
 int DecodeAscii(UINT64 hash, char* buffer, int len) {
-	if ((hash & UseFiveBitEncodingOrThreeBitHash) != UseFiveBitEncodingOrThreeBitHash)
+	if ((hash & UseFiveBitEncodingOrThreeBitHash) != 0)
 		return 0;
 
 	char* chash = (char*)&hash;
@@ -359,7 +363,7 @@ int DecodeAscii(UINT64 hash, char* buffer, int len) {
 	if (buffer != NULL && len >= clen+1) {
 		int i;
 		for (i = 0; i < clen; i++)
-			*buffer++ = *chash;
+			*buffer++ = *chash++;
 		*buffer = 0;
 		return clen+1;
 	}
