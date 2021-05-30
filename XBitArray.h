@@ -6,7 +6,6 @@
 class XBitArray255
 {
 protected:
-	UINT16 directory;
 	UINT16 array[16];
 
 public:
@@ -18,6 +17,8 @@ public:
 
 	bool SetBit(BYTE item);
 	bool UnsetBit(BYTE item);
+	void Add(XBitArray255& operand);
+	void Subtract(XBitArray255& operand);
 
 	UINT16* CreateCompactBitArray();	// up to size=17 UINT16[]	// most compact // min size: 16 bits; Typical: 32 bits <= size <= 64 bits
 	BYTE GetCompactBitArray(UINT16 array[], BYTE maxCnt);
@@ -30,7 +31,7 @@ public:
 			if ((bitSegment & 0x1) != 0)
 				cnt++;
 			bitSegment >>= 1;
-		} while (bitSegment != 0);
+		}	while (bitSegment != 0);
 		return cnt;
 	}
 };

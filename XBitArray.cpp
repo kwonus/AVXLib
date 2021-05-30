@@ -6,13 +6,11 @@
 #include <XBitArray.h>
 
 XBitArray255::XBitArray255() {
-	this->directory = 0;
 	for (auto a = 0; a < 16; a++)
 		array[a] = 0;
 }
 
 XBitArray255::XBitArray255(UINT16 compacted[]) {
-	this->directory = 0;
 	BYTE cnt = 0;
 	BYTE a = 0;
 	UINT16 bit = 1;
@@ -31,7 +29,6 @@ XBitArray255::XBitArray255(UINT16 compacted[]) {
 }
 
 XBitArray255::XBitArray255(BYTE items[]) {
-	this->directory = 0;
 	for (auto a = 0; a < 16; a++)
 		array[a] = 0;
 	if (items != NULL) {
@@ -41,7 +38,6 @@ XBitArray255::XBitArray255(BYTE items[]) {
 }
 
 XBitArray255::XBitArray255(bool positionalBits[], BYTE cnt) {
-	this->directory = 0;
 	for (auto a = 0; a < 16; a++)
 		array[a] = 0;
 	if (positionalBits != NULL && cnt > 0 && cnt <= 255) {
@@ -59,11 +55,6 @@ bool XBitArray255::SetBit(BYTE item) {
 		BYTE index = (item-1) / 16;
 		BYTE local = (item-1) % 16;
 
-		UINT16 dir = 1;
-		if (index > 0)
-			dir <<= index;
-		this->directory |= dir;
-
 		UINT16 loc = 1;
 		if (local > 0)
 			loc <<= local;
@@ -79,11 +70,6 @@ bool XBitArray255::UnsetBit(BYTE item) {
 		BYTE index = (item - 1) / 16;
 		BYTE local = (item - 1) % 16;
 
-		UINT16 dir = 1;
-		if (index > 0)
-			dir <<= index;
-		this->directory |= dir;
-
 		UINT16 loc = 1;
 		if (local > 0)
 			loc <<= local;
@@ -94,6 +80,22 @@ bool XBitArray255::UnsetBit(BYTE item) {
 	return false;
 }
 
+void XBitArray255::Add(XBitArray255& operand) {
+	for (int i = 0; i < 16; i++) {
+		this->array[i] |= operand.array[i];
+	}
+}
+void XBitArray255::Subtract(XBitArray255& operand) {
+	UINT16 bit = 1;
+	for (int i = 0; i < 16; i++) {
+		if (this->array[i] != 0) {
+			auto negation = UINT16(0xFFFF ^ operand.array[i]);
+			this->array[i] &= negation;
+		}
+		bit <<= 1;
+	}
+}
+
 UINT16* XBitArray255::CreateCompactBitArray() {	// up to size=17 UINT16[]	// most compact
 	int countSegments = 0;
 	for (auto s = 0; s < 16; s++)
@@ -101,11 +103,16 @@ UINT16* XBitArray255::CreateCompactBitArray() {	// up to size=17 UINT16[]	// mos
 			countSegments++;
 
 	auto result = (UINT16*) malloc((1 + countSegments) * sizeof(UINT16));
-	result[0] = this->directory;
+	result[0] = 0;
 	BYTE cnt = 1;
-	for (auto index = 0; index < 16; index++)
-		if (this->array[index] != 0)
+	UINT16 dir = 0x1;
+	for (auto index = 0; index < 16; index++) {
+		if (this->array[index] != 0) {
 			result[cnt++] = this->array[index];
+			result[0] |= dir;
+		}
+		dir <<= 1;
+	}
 
 	return result;
 }
@@ -116,15 +123,17 @@ BYTE XBitArray255::GetCompactBitArray(UINT16 result[], BYTE maxCnt) {			// up to
 		if (this->array[s] != 0)
 			countSegments++;
 
-	result[0] = this->directory;
-	if (result[0] == 0)
-		return 1;
+	result[0] = 0;
 
 	BYTE cnt = 0;
-	for (auto index = 0; index < 16; index++)
-		if (this->array[index] != 0)
+	UINT16 dir = 0x1;
+	for (auto index = 0; index < 16; index++) {
+		if (this->array[index] != 0) {
 			result[++cnt] = this->array[index];
-
+			result[0] |= dir;
+		}
+		dir <<= 1;
+	}
 	return countSegments + 1;
 }
 
